@@ -1,11 +1,11 @@
 # Typing Problems for Lambda Calculus
 
-This project was developed as part of the PEEC 2024/2025 program.
+This work was developed as part of the PEEC 2024/2025 program.
 
 **Tutor:** António Mário da Silva Marcos Florido  
 **Co-tutor:** Sandra Maria Mendes Alves
 
-This project implements **Type Checking** and **Type Inference** algorithms in Haskell for a subsystem of the Lambda Calculus.
+This project implements **Type Checking** and **Type Inference** algorithms in Haskell for a Lambda Calculus subsystem.
 
 ## Supported Structures
 
