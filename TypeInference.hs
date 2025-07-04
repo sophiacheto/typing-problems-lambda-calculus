@@ -1,37 +1,39 @@
-import Data.List (delete,  intersect)
+module TypeInference where
 
-data Type = VarType Char      
-          | Arrow Type Type   
+import Data.List (delete,  intersect)
+import Data.Maybe (fromJust)
+
+data Type = VarType Char      -- tipos
+          | Arrow Type Type     -- tipo -> tipo
             deriving (Show, Eq)
 
-data Term = Var Char       
-          | Lambda Char Term 
-          | App Term Term   
+data Term = Var Char          -- variaveis
+          | Lambda Char Term  -- f(x)=y
+          | App Term Term       -- aplicação
             deriving (Show, Eq)
 
 type Context = [(Char, Type)]
 
 ------- INFERENCE
 infer :: Term -> (Context, Type)
-infer = typeInfer []
+infer term =  fst (typeInfer [] term)
 
 
-typeInfer :: [Char] -> Term -> (Context, Type)
-typeInfer typesUsed (Var v) = ([(v, VarType t)], VarType t)
+typeInfer :: [Char] -> Term -> ((Context, Type), [Char])
+typeInfer typesUsed (Var v) = (([(v, VarType t)], VarType t), t : typesUsed)
                             where t = newType typesUsed
-typeInfer typesUsed (Lambda ch term)
-                                    | ch `occursInTerm` term = let (basis, tp') = typeInfer typesUsed term
-                                                               in (erase basis ch, Arrow (findType ch basis) tp')
-                                    | otherwise = let
-                                                    newt = newType typesUsed
-                                                    (basis, tp') = typeInfer (newt : typesUsed) term
-                                                  in (basis, Arrow (VarType newt) tp')
-typeInfer typesUsed (App term1 term2) = (applySubsCntx subs (basis1 ++ basis2), applySubs subs newt)
-                                        where (basis1, tp1) = typeInfer typesUsed term1     -- checar typesused
-                                              (basis2, tp2) = typeInfer typesUsed term2
+typeInfer typesUsed (Lambda ch term) = case chType of
+                                    Just chT -> ((erase basis ch, Arrow chT tp'), used)
+                                    Nothing -> let newt = newType used
+                                                  in ((basis, Arrow (VarType newt) tp'), newt : used)
+                                    where ((basis, tp'), used) = typeInfer typesUsed term
+                                          chType = findType ch basis
+typeInfer typesUsed (App term1 term2) = ((applySubsCntx subs (basis1 ++ basis2), applySubs subs (VarType newt)), newt : used2)
+                                        where ((basis1, tp1), used1) = typeInfer typesUsed term1     
+                                              ((basis2, tp2), used2) = typeInfer used1 term2
                                               freeVar = freeVariables term1 `intersect` freeVariables term2
-                                              newt = VarType (newType typesUsed)
-                                              subs = unify ((tp1, Arrow tp2 newt) : (getSet freeVar basis1 basis2))
+                                              newt = newType used2
+                                              subs = unify ((tp1, Arrow tp2 (VarType newt)) : (getSet freeVar basis1 basis2))
 
 
 ------- UNIFICATION
@@ -42,7 +44,7 @@ unify (curr:rest) = unifyTypes curr ++ unify rest
 unifyTypes :: (Type, Type) -> [(Char, Type)]
 unifyTypes (VarType c, t)
                     | VarType c == t = []
-                    | not (c `isFreeVar` t) = [(c, t)]
+                    | not (c `isTypeVar` t) = [(c, t)]
                     | otherwise = error "Fail"
 unifyTypes (t, VarType c) = unifyTypes (VarType c, t)
 unifyTypes (Arrow a b, Arrow c d) = unifyTypes (applySubs subs a, applySubs subs c) `compose` subs
@@ -57,9 +59,9 @@ freeVariables (Lambda ch term) = delete ch (freeVariables term)
 freeVariables (App term1 term2) = freeVariables term1 ++ freeVariables term2
 
 
-isFreeVar :: Char -> Type -> Bool
-isFreeVar ch (VarType v) = ch == v
-isFreeVar ch (Arrow t1 t2) = isFreeVar ch t1 || isFreeVar ch t2
+isTypeVar :: Char -> Type -> Bool
+isTypeVar ch (VarType v) = ch == v
+isTypeVar ch (Arrow t1 t2) = isTypeVar ch t1 || isTypeVar ch t2
 
 
 newType :: [Char] -> Char
@@ -67,12 +69,13 @@ newType used = head (filter (`notElem` used) ['A'..'Z'])
 
 
 getSet :: [Char] -> Context -> Context -> [(Type, Type)]
-getSet freeVar basis1 basis2 = [(findType var basis1, findType var basis2) | var <- freeVar]
+getSet freeVar basis1 basis2 = [(fromJust (findType var basis1), fromJust (findType var basis2)) | var <- freeVar]
+
 
 
 compose :: [(Char, Type)] -> [(Char, Type)] -> [(Char, Type)]
 compose subs1 subs2 = result ++ subs1
-                    where result = [ (v, applySubs subs1 t) | (v, t) <- subs2 ]
+                    where result = [ (v, applySubs subs1 t) | (v, t) <- subs2 ]  
 
 
 applySubs :: [(Char, Type)] -> Type -> Type
@@ -95,11 +98,10 @@ erase :: Context -> Char -> Context
 erase cntx var = [(v,t) | (v,t)<-cntx, v/=var]
 
 
-occursInTerm :: Char -> Term -> Bool
-occursInTerm ch (Var t) = ch == t
-occursInTerm ch (Lambda c term) = occursInTerm ch (Var c) || occursInTerm ch term
-occursInTerm ch (App t1 t2) = occursInTerm ch t1 || occursInTerm ch t2
+findType :: Char -> Context -> Maybe Type
+findType ch cntx
+            | not (null l) = Just (head l)
+            | otherwise = Nothing
+            where l = [t | (v,t) <- cntx, v == ch]
 
 
-findType :: Char -> Context -> Type
-findType ch cntx = head [t | (v,t)<-cntx, v==ch]
