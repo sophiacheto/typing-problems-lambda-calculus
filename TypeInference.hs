@@ -15,8 +15,9 @@ data Term = Var Char          -- variaveis
 type Context = [(Char, Type)]
 
 ------- INFERENCE
-infer :: Term -> (Context, Type)
-infer term =  fst (typeInfer [] term)
+-- infer :: Term -> (Context, Type)
+infer :: Term -> IO ()
+infer term = putStrLn (prettyPrint (fst (typeInfer [] term)))
 
 
 typeInfer :: [Char] -> Term -> ((Context, Type), [Char])
@@ -34,6 +35,7 @@ typeInfer typesUsed (App term1 term2) = ((applySubsCntx subs (basis1 ++ basis2),
                                               freeVar = freeVariables term1 `intersect` freeVariables term2
                                               newt = newType used2
                                               subs = unify ((tp1, Arrow tp2 (VarType newt)) : (getSet freeVar basis1 basis2))
+
 
 
 ------- UNIFICATION
@@ -104,4 +106,13 @@ findType ch cntx
             | otherwise = Nothing
             where l = [t | (v,t) <- cntx, v == ch]
 
+prettyPrint :: (Context, Type) -> String
+prettyPrint (ctx, t) = "CONTEXT\n" ++ prettyCtx ctx ++ "\nTYPE: " ++ prettyType t
 
+prettyCtx :: Context -> String
+prettyCtx [] = []
+prettyCtx ((chr, t) : xs) = "(" ++ [chr] ++ " : " ++ prettyType t ++ ")" ++ ['\n'] ++ prettyCtx xs
+
+prettyType :: Type -> String
+prettyType (VarType char) = [char]
+prettyType (Arrow t1 t2) = prettyType t1 ++ "->" ++ prettyType t2
